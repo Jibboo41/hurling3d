@@ -1454,7 +1454,7 @@ function edgeMarker(el, pos, label) {
   let x = _p.x, y = _p.y;
   if (behind) { x = -x; y = -y; }
   const w = window.innerWidth, h = window.innerHeight;
-  const mx = 1 - 60 / w, my = 1 - 70 / h;
+  const mx = 1 - 120 / w, my = 1 - 190 / h;
   const inside = !behind && Math.abs(x) < mx && Math.abs(y) < my;
   el.classList.toggle('show', !inside);
   if (inside) return;
