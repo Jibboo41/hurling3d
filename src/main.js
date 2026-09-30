@@ -25,6 +25,19 @@ const FORMATION = [
   { role: 'F', x: 24, z: 9 },
 ];
 
+const SQUAD = [
+  [['Conor Walsh', 1], ['Declan Murphy', 4], ['Seán Brennan', 6], ['Tadhg Kelly', 8], ['Pádraig Ryan', 9], ['Cian Doyle', 11], ['Eoin Byrne', 14]],
+  [['Niall Quinn', 1], ['Ciarán Nolan', 3], ['Darragh Fox', 5], ['Fionn Hayes', 7], ['Rory Gleeson', 10], ['Colm Dunne', 12], ['Shane Lacey', 15]],
+];
+
+const ROLE_ATTR = {
+  GK: { speed: 55, strike: 62, pass: 58, tackle: 40, stamina: 70, keeping: 80 },
+  B: { speed: 62, strike: 55, pass: 58, tackle: 76, stamina: 72, keeping: 0 },
+  M: { speed: 68, strike: 65, pass: 76, tackle: 62, stamina: 82, keeping: 0 },
+  F: { speed: 76, strike: 80, pass: 62, tackle: 46, stamina: 68, keeping: 0 },
+};
+const ATTR_LABELS = [['speed', 'Speed'], ['strike', 'Striking'], ['pass', 'Passing'], ['tackle', 'Tackling'], ['stamina', 'Stamina']];
+
 const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 const rand = (a, b) => a + Math.random() * (b - a);
 const dist2D = (a, b) => Math.hypot(a.x - b.x, a.z - b.z);
@@ -223,56 +236,138 @@ buildWorld();
 
 // ---------------------------------------------------------------- player meshes
 const GEO = {
-  thigh: new THREE.BoxGeometry(0.17, 0.42, 0.17),
-  sock: new THREE.BoxGeometry(0.15, 0.4, 0.15),
-  boot: new THREE.BoxGeometry(0.26, 0.09, 0.14),
-  shorts: new THREE.BoxGeometry(0.34, 0.26, 0.46),
-  torso: new THREE.CapsuleGeometry(0.23, 0.42, 4, 10),
-  arm: new THREE.BoxGeometry(0.11, 0.55, 0.11),
-  head: new THREE.SphereGeometry(0.14, 14, 10),
-  helmet: new THREE.SphereGeometry(0.168, 14, 10, 0, Math.PI * 2, 0, Math.PI * 0.55),
-  grill: new THREE.BoxGeometry(0.02, 0.17, 0.22),
-  handle: new THREE.CylinderGeometry(0.022, 0.026, 0.78, 6),
-  bas: new THREE.BoxGeometry(0.04, 0.3, 0.13),
+  thigh: new THREE.CapsuleGeometry(0.078, 0.26, 3, 8),
+  shin: new THREE.CapsuleGeometry(0.062, 0.26, 3, 8),
+  knee: new THREE.SphereGeometry(0.07, 8, 6),
+  sockTop: new THREE.CylinderGeometry(0.068, 0.068, 0.05, 10),
+  boot: new THREE.BoxGeometry(0.27, 0.1, 0.13),
+  shorts: new THREE.CylinderGeometry(0.19, 0.22, 0.3, 14),
+  torso: new THREE.CapsuleGeometry(0.2, 0.3, 4, 12),
+  hoop: new THREE.TorusGeometry(0.205, 0.028, 6, 20),
+  collar: new THREE.TorusGeometry(0.1, 0.022, 6, 14),
+  shoulder: new THREE.SphereGeometry(0.078, 8, 6),
+  upperArm: new THREE.CapsuleGeometry(0.048, 0.2, 3, 8),
+  sleeve: new THREE.CylinderGeometry(0.066, 0.072, 0.2, 10),
+  foreArm: new THREE.CapsuleGeometry(0.042, 0.2, 3, 8),
+  hand: new THREE.SphereGeometry(0.052, 8, 6),
+  neck: new THREE.CylinderGeometry(0.05, 0.06, 0.1, 8),
+  head: new THREE.SphereGeometry(0.13, 16, 12),
+  eye: new THREE.SphereGeometry(0.014, 6, 4),
+  helmet: new THREE.SphereGeometry(0.152, 16, 12, 0, Math.PI * 2, 0, Math.PI * 0.56),
+  hair: new THREE.SphereGeometry(0.1, 10, 8),
+  grillBar: new THREE.BoxGeometry(0.018, 0.012, 0.2),
+  grillPost: new THREE.BoxGeometry(0.018, 0.14, 0.012),
+  handle: new THREE.CylinderGeometry(0.02, 0.026, 0.8, 6),
+  bas: new THREE.BoxGeometry(0.035, 0.3, 0.12),
+  basTip: new THREE.BoxGeometry(0.035, 0.08, 0.1),
+  numberPlane: new THREE.PlaneGeometry(0.3, 0.3),
 };
 const woodMat = new THREE.MeshStandardMaterial({ color: 0xd9b47a, roughness: 0.7 });
-const bootMat = new THREE.MeshStandardMaterial({ color: 0x111111 });
-const grillMat = new THREE.MeshStandardMaterial({ color: 0x999999, metalness: 0.6, roughness: 0.3 });
-const skinMat = new THREE.MeshStandardMaterial({ color: 0xe8b894, roughness: 0.6 });
+const gripMat = new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.9 });
+const bootMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.6 });
+const grillMat = new THREE.MeshStandardMaterial({ color: 0xaaaaaa, metalness: 0.7, roughness: 0.3 });
+const eyeMat = new THREE.MeshBasicMaterial({ color: 0x151515 });
+const SKINS = [0xf0c4a0, 0xe8b894, 0xd99e76, 0xc58a62, 0x8d5a3b];
+const HAIRS = [0x2b1b10, 0x5a3a1c, 0x9a6a2a, 0xc9a45a, 0x121212, 0x7a2e12];
 
-function buildPlayerMesh(kit, isGK) {
+const numberTexCache = new Map();
+function numberTexture(n, color) {
+  const key = `${n}|${color}`;
+  if (numberTexCache.has(key)) return numberTexCache.get(key);
+  const c = document.createElement('canvas');
+  c.width = c.height = 64;
+  const g = c.getContext('2d');
+  g.fillStyle = '#' + color.toString(16).padStart(6, '0');
+  g.font = 'bold 46px system-ui, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+  g.fillText(String(n), 32, 35);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  numberTexCache.set(key, tex);
+  return tex;
+}
+
+function buildPlayerMesh(kit, isGK, look) {
   const root = new THREE.Group();
-  const jersey = new THREE.MeshStandardMaterial({ color: isGK ? kit.gk : kit.jersey, roughness: 0.75 });
-  const shorts = new THREE.MeshStandardMaterial({ color: kit.shorts, roughness: 0.8 });
+  const body = new THREE.Group();
+  root.add(body);
+  const jerseyCol = isGK ? kit.gk : kit.jersey;
+  const trimCol = isGK ? 0x111111 : kit.trim;
+  const jersey = new THREE.MeshStandardMaterial({ color: jerseyCol, roughness: 0.75 });
+  const trim = new THREE.MeshStandardMaterial({ color: trimCol, roughness: 0.7 });
+  const shorts = new THREE.MeshStandardMaterial({ color: isGK ? 0x111111 : kit.shorts, roughness: 0.8 });
   const helmet = new THREE.MeshStandardMaterial({ color: kit.helmet, roughness: 0.35, metalness: 0.1 });
+  const skin = new THREE.MeshStandardMaterial({ color: look.skin, roughness: 0.6 });
+  const hairMat = new THREE.MeshStandardMaterial({ color: look.hair, roughness: 0.9 });
+  const glove = isGK ? new THREE.MeshStandardMaterial({ color: 0xfafafa, roughness: 0.6 }) : skin;
   const mk = (geo, mat, x, y, z) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); m.castShadow = true; return m; };
 
+  // legs: hip -> knee
   const legs = [];
   for (const s of [-1, 1]) {
     const hip = new THREE.Group();
-    hip.position.set(0, 0.86, s * 0.11);
-    hip.add(mk(GEO.thigh, skinMat, 0, -0.2, 0), mk(GEO.sock, jersey, 0, -0.6, 0), mk(GEO.boot, bootMat, 0.05, -0.82, 0));
-    root.add(hip); legs.push(hip);
+    hip.position.set(0, 0.88, s * 0.11);
+    hip.add(mk(GEO.thigh, skin, 0, -0.2, 0));
+    const knee = new THREE.Group();
+    knee.position.set(0, -0.41, 0);
+    knee.add(mk(GEO.knee, skin, 0, 0, 0), mk(GEO.shin, jersey, 0, -0.2, 0), mk(GEO.sockTop, trim, 0, -0.06, 0), mk(GEO.boot, bootMat, 0.05, -0.43, 0));
+    hip.add(knee);
+    body.add(hip);
+    legs.push({ hip, knee });
   }
-  root.add(mk(GEO.shorts, shorts, 0, 0.92, 0));
-  root.add(mk(GEO.torso, jersey, 0, 1.33, 0));
+  const shortsMesh = mk(GEO.shorts, shorts, 0, 0.94, 0);
+  shortsMesh.scale.set(0.85, 1, 1.22);
+  body.add(shortsMesh);
+
+  // torso (pivots at the waist so it can lean / twist)
+  const torso = new THREE.Group();
+  torso.position.set(0, 1.0, 0);
+  const chest = new THREE.Group();
+  chest.scale.set(0.82, 1, 1.12);
+  chest.add(mk(GEO.torso, jersey, 0, 0.36, 0));
+  for (const y of [0.3, 0.46]) { const h = mk(GEO.hoop, trim, 0, y, 0); h.rotation.x = Math.PI / 2; chest.add(h); }
+  torso.add(chest);
+  const collar = mk(GEO.collar, trim, 0, 0.73, 0); collar.rotation.x = Math.PI / 2; torso.add(collar);
+  const num = new THREE.Mesh(GEO.numberPlane, new THREE.MeshBasicMaterial({ map: numberTexture(look.number, trimCol), transparent: true, depthWrite: false }));
+  num.position.set(-0.178, 0.4, 0); num.rotation.y = -Math.PI / 2;
+  torso.add(num);
+  torso.add(mk(GEO.neck, skin, 0, 0.77, 0));
+
+  // arms: shoulder -> elbow
   const arms = [];
   for (const s of [-1, 1]) {
     const sh = new THREE.Group();
-    sh.position.set(0, 1.55, s * 0.29);
-    sh.add(mk(GEO.arm, skinMat, 0, -0.26, 0));
-    sh.rotation.z = 0.7;
-    root.add(sh); arms.push(sh);
+    sh.position.set(0, 0.62, s * 0.27);
+    sh.add(mk(GEO.shoulder, jersey, 0, 0, 0), mk(GEO.upperArm, skin, 0, -0.14, 0), mk(GEO.sleeve, jersey, 0, -0.1, 0));
+    const el = new THREE.Group();
+    el.position.set(0, -0.29, 0);
+    el.add(mk(GEO.foreArm, skin, 0, -0.135, 0), mk(GEO.hand, glove, 0, -0.29, 0));
+    sh.add(el);
+    torso.add(sh);
+    arms.push({ sh, el });
   }
-  root.add(mk(GEO.head, skinMat, 0, 1.86, 0));
-  root.add(mk(GEO.helmet, helmet, 0, 1.88, 0));
-  root.add(mk(GEO.grill, grillMat, 0.15, 1.83, 0));
 
+  // head
+  const head = new THREE.Group();
+  head.position.set(0, 0.9, 0);
+  head.add(mk(GEO.head, skin, 0, 0, 0));
+  const hr = mk(GEO.hair, hairMat, -0.05, -0.02, 0); hr.scale.set(1, 0.9, 1.05); head.add(hr);
+  head.add(mk(GEO.helmet, helmet, 0, 0.015, 0));
+  for (const z of [-0.1, 0.1]) { const e = new THREE.Mesh(GEO.eye, eyeMat); e.position.set(0.118, 0.02, z * 0.55); head.add(e); }
+  for (const y of [-0.045, 0.0, 0.045]) head.add(mk(GEO.grillBar, grillMat, 0.15, y, 0));
+  for (const z of [-0.07, 0, 0.07]) head.add(mk(GEO.grillPost, grillMat, 0.15, 0, z));
+  torso.add(head);
+  body.add(torso);
+
+  // hurley, gripped by the right hand (end of the right forearm)
   const pivot = new THREE.Group();
-  pivot.position.set(0.18, 1.18, 0.28);
-  pivot.add(mk(GEO.handle, woodMat, 0, -0.4, 0), mk(GEO.bas, woodMat, 0.02, -0.92, 0));
-  root.add(pivot);
-  return { root, legs, arms, pivot };
+  pivot.position.set(0, -0.29, 0);
+  const grip = mk(GEO.handle, woodMat, 0, -0.3, 0); grip.scale.set(1, 1, 1);
+  const tape = mk(new THREE.CylinderGeometry(0.028, 0.028, 0.22, 6), gripMat, 0, -0.08, 0);
+  pivot.add(grip, tape, mk(GEO.bas, woodMat, 0.012, -0.76, 0), mk(GEO.basTip, woodMat, 0.03, -0.92, 0));
+  arms[1].el.add(pivot);
+
+  root.scale.setScalar(look.height);
+  return { root, body, torso, chest, head, legs, arms, pivot };
 }
 
 // ---------------------------------------------------------------- audio
@@ -331,7 +426,7 @@ const game = {
   score: [{ g: 0, p: 0 }, { g: 0, p: 0 }],
   deadTimer: 0, onDeadEnd: null,
   plan: [{ chasers: [], target: new V3(), mode: '' }, { chasers: [], target: new V3(), mode: '' }],
-  camMode: 0,
+  camMode: 0, autoSwitch: true,
   prevState: 'play',
 };
 
@@ -361,7 +456,7 @@ scene.add(humanRing, humanMarker, aimArrow, landMarker, ballShadowMarker);
 
 // ---------------------------------------------------------------- players
 class Player {
-  constructor(team, form) {
+  constructor(team, form, idx) {
     this.team = team;
     this.role = form.role;
     this.dir = team === 0 ? 1 : -1;
@@ -374,8 +469,18 @@ class Player {
     this.tackleTimer = 0.5; this.decisionTimer = 0; this.carryTime = 0;
     this.swing = 0; this.phase = Math.random() * 6;
     this.saveRoll = -1; this.saveOk = false; this.freeShot = false;
-    this.speedMul = rand(0.95, 1.05);
-    this.mesh = buildPlayerMesh(TEAMS[team], form.role === 'GK');
+    const [name, number] = SQUAD[team][idx];
+    this.name = name; this.number = number;
+    this.attr = {};
+    for (const k in ROLE_ATTR[form.role]) {
+      const b = ROLE_ATTR[form.role][k];
+      this.attr[k] = b === 0 ? 0 : Math.round(clamp(b + rand(-12, 12), 35, 99));
+    }
+    // speed 40 -> 0.86x, 100 -> 1.11x
+    this.speedMul = 0.86 + 0.25 * (this.attr.speed - 40) / 60;
+    this.energy = 1; this.winded = false; this.celebrate = 0; this.headYaw = 0;
+    const look = { skin: SKINS[(Math.random() * SKINS.length) | 0], hair: HAIRS[(Math.random() * HAIRS.length) | 0], number, height: 0.95 + (this.attr.speed > 70 ? 0.02 : 0.05) * Math.random() + rand(0, 0.06) };
+    this.mesh = buildPlayerMesh(TEAMS[team], form.role === 'GK', look);
     scene.add(this.mesh.root);
   }
 
@@ -394,9 +499,10 @@ class Player {
     this.carryTime = ball.carrier === this ? this.carryTime + dt : 0;
 
     const desired = this === human ? humanDesired() : this.think(dt);
+    const fm = this.energy < 0.25 ? 0.7 + this.energy * 1.2 : 1;
     const k = 1 - Math.exp(-7 * dt);
-    this.vel.x += (desired.x - this.vel.x) * k;
-    this.vel.z += (desired.z - this.vel.z) * k;
+    this.vel.x += (desired.x * fm - this.vel.x) * k;
+    this.vel.z += (desired.z * fm - this.vel.z) * k;
     this.pos.x += this.vel.x * dt;
     this.pos.z += this.vel.z * dt;
 
@@ -406,6 +512,11 @@ class Player {
     this.pos.z = clamp(this.pos.z, -mz, mz);
 
     const sp = Math.hypot(this.vel.x, this.vel.z);
+    const eff = sp / this.speedMul;
+    if (eff > 6.2) this.energy -= (eff - 6.2) * 0.014 * (1.5 - this.attr.stamina / 100) * (this === human ? 1 : 0.6) * dt;
+    else if (eff < 5) this.energy += 0.06 * dt;
+    this.energy = clamp(this.energy, 0, 1);
+    if (this.energy < 0.05) this.winded = true; else if (this.energy > 0.3) this.winded = false;
     let fx = this.facing.x, fz = this.facing.z;
     if (this === human && inputDir.lengthSq() > 0) { fx = inputDir.x; fz = inputDir.z; }
     else if (sp > 0.5) { fx = this.vel.x / sp; fz = this.vel.z / sp; }
@@ -490,29 +601,74 @@ class Player {
     m.root.position.set(this.pos.x, 0, this.pos.z);
     m.root.rotation.y = Math.atan2(-this.facing.z, this.facing.x);
     const sp = Math.hypot(this.vel.x, this.vel.z);
-    this.phase += sp * dt * 1.7;
-    const amp = Math.min(sp / 7, 1) * 0.7;
-    m.legs[0].rotation.z = Math.sin(this.phase) * amp;
-    m.legs[1].rotation.z = -Math.sin(this.phase) * amp;
-    m.arms[0].rotation.z = 0.7 - Math.sin(this.phase) * amp * 0.4;
-    m.arms[1].rotation.z = 0.7 + Math.sin(this.phase) * amp * 0.4;
-    m.root.position.y = Math.abs(Math.sin(this.phase)) * amp * 0.08;
+    const amp = Math.min(sp / 7.5, 1);
+    this.phase += sp * dt * 1.55;
+    const ph = this.phase, t = game.time;
+    this.celebrate = Math.max(0, this.celebrate - dt);
+    const celeb = this.celebrate > 0;
 
+    // legs: hip swing with knee flex
+    for (let i = 0; i < 2; i++) {
+      const phi = ph + i * Math.PI, leg = m.legs[i];
+      leg.hip.rotation.z = Math.sin(phi) * 0.85 * amp;
+      leg.knee.rotation.z = -(0.06 + 0.95 * Math.max(0, Math.cos(phi)) * amp);
+    }
+
+    // hurley / strike state
     let a;
-    if (this === human && charging && ball.carrier === this) a = 0.9 - 2.5 * charge;
+    let swinging = false;
+    if (this === human && charging && ball.carrier === this) { a = 0.9 - 2.5 * charge; swinging = true; }
     else if (this.swing > 0) {
       this.swing += dt / 0.3;
-      const t = Math.min(this.swing, 1);
-      a = -1.6 + 3.9 * (1 - (1 - t) * (1 - t));
+      const u = Math.min(this.swing, 1);
+      a = -1.6 + 3.9 * (1 - (1 - u) * (1 - u));
+      swinging = true;
       if (this.swing >= 1) this.swing = 0;
     } else if (ball.carrier === this) a = 1.25;
-    else a = 0.75 + Math.sin(game.time * 2 + this.phase) * 0.05;
-    m.pivot.rotation.z = a;
+    else a = 0.75 + Math.sin(t * 2 + this.phase) * 0.05;
+
+    // torso: forward lean, counter-rotation, breathing, swing twist
+    let lean = -(0.05 + 0.26 * amp);
+    if (this.swing > 0) lean -= Math.sin(Math.min(this.swing, 1) * Math.PI) * 0.3;
+    let twist = Math.sin(ph) * 0.3 * amp;
+    if (swinging) twist = -(a - 1.0) * 0.22;
+    m.torso.rotation.z += (lean - m.torso.rotation.z) * Math.min(1, dt * 12);
+    m.torso.rotation.y += (twist - m.torso.rotation.y) * Math.min(1, dt * 14);
+    m.torso.rotation.x = Math.cos(ph) * 0.05 * amp;
+    m.chest.scale.y = 1 + Math.sin(t * 2.4 + this.phase) * 0.012 * (1 + (1 - this.energy) * 3);
+    m.body.position.y = Math.abs(Math.cos(ph)) * 0.08 * amp;
+
+    // arms
+    const [L, R] = m.arms;
+    L.sh.rotation.z = -Math.sin(ph) * 0.9 * amp + 0.05;
+    L.sh.rotation.x = 0.12;
+    L.el.rotation.z = 0.3 + 0.7 * amp;
+    R.sh.rotation.x = -0.12;
+    R.sh.rotation.z = 0.15 + a * 0.4;
+    R.el.rotation.z = 0.6;
+    m.pivot.rotation.z = a - R.sh.rotation.z - R.el.rotation.z;
+    if (ball.carrier === this && !swinging) { L.sh.rotation.z = 0.5; L.el.rotation.z = 0.9; }
+
+    if (celeb) {
+      const j = Math.abs(Math.sin(t * 9 + this.phase));
+      m.body.position.y = j * 0.3;
+      L.sh.rotation.z = R.sh.rotation.z = 2.9 + Math.sin(t * 12 + this.phase) * 0.25;
+      L.el.rotation.z = R.el.rotation.z = 0.15;
+      m.pivot.rotation.z = -R.sh.rotation.z - R.el.rotation.z + 2.6;
+      m.torso.rotation.z = 0.12;
+    }
+
+    // head tracks the ball
+    let want = Math.atan2(-(ball.pos.z - this.pos.z), ball.pos.x - this.pos.x) - m.root.rotation.y;
+    want = Math.atan2(Math.sin(want), Math.cos(want));
+    this.headYaw += (clamp(want, -0.9, 0.9) - this.headYaw) * (1 - Math.exp(-8 * dt));
+    m.head.rotation.y = this.headYaw - m.torso.rotation.y;
+    m.head.rotation.z = -lean * 0.8;
   }
 }
 
 const players = [];
-for (let t = 0; t < 2; t++) for (const f of FORMATION) players.push(new Player(t, f));
+for (let t = 0; t < 2; t++) FORMATION.forEach((f, i) => players.push(new Player(t, f, i)));
 
 function teammates(p) { return players.filter((o) => o.team === p.team && o !== p); }
 function opponents(p) { return players.filter((o) => o.team !== p.team); }
@@ -540,10 +696,32 @@ function setHuman(p) {
   human = p;
 }
 
+let switchLock = 0;
+
 function switchHuman() {
+  if (ball.carrier === human) return;
   const cand = players.filter((p) => p.team === 0 && !p.isGK && p !== human)
     .sort((a, b) => dist2D(a.pos, ball.pos) - dist2D(b.pos, ball.pos));
-  if (cand.length) setHuman(cand[0]);
+  if (cand.length) { setHuman(cand[0]); switchLock = 2.5; }
+}
+
+// Tab / Shift+Tab: step through the outfield players in formation order
+function cycleHuman(dir) {
+  if (ball.carrier === human) return;
+  const list = players.filter((p) => p.team === 0 && !p.isGK);
+  const i = list.indexOf(human);
+  setHuman(list[(i + dir + list.length) % list.length]);
+  switchLock = 2.5;
+}
+
+function autoSwitch(dt) {
+  switchLock = Math.max(0, switchLock - dt);
+  if (!game.autoSwitch || switchLock > 0 || game.state !== 'play' || !human || ball.carrier === human) return;
+  if (ball.carrier && ball.carrier.team === 0) return;
+  const tgt = predictBall();
+  let best = null, bd = Infinity;
+  for (const p of players) if (p.team === 0 && !p.isGK) { const d = dist2D(p.pos, tgt); if (d < bd) { bd = d; best = p; } }
+  if (best && best !== human && dist2D(human.pos, tgt) - bd > 7) { setHuman(best); switchLock = 1.5; }
 }
 
 // ---------------------------------------------------------------- ball mechanics
@@ -596,13 +774,16 @@ function strike(p, v) {
   sfx.hit(Math.min(v.length() / 36, 1));
 }
 
+const strikePower = (p) => 0.92 + 0.2 * (p.attr.strike - 40) / 60;
+const strikeScatter = (p) => Math.max(0.15, 1.6 - p.attr.strike / 100);
+
 function shootPoint(p) {
   const gx = p.dir * HALF_L;
   const d = Math.hypot(gx - ball.pos.x, ball.pos.z);
   const target = new V3(gx, rand(4.5, 6.5), rand(-1.6, 1.6));
   const v = velWithAngle(ball.pos, target, rand(26, 34) * DEG);
-  rotateY(v, rand(-1, 1) * (0.015 + d * 0.0011));
-  v.multiplyScalar(rand(0.97, 1.05));
+  rotateY(v, rand(-1, 1) * (0.015 + d * 0.0011) * strikeScatter(p));
+  v.multiplyScalar(1 + rand(-0.03, 0.05) * strikeScatter(p));
   strike(p, v);
 }
 
@@ -612,7 +793,7 @@ function shootGoal(p) {
   const side = k.pos.z > 0 ? -1 : 1;
   const target = new V3(gx, rand(0.5, 2.0), side * rand(1.0, 2.9));
   const v = velWithSpeed(ball.pos, target, rand(26, 32));
-  rotateY(v, rand(-0.03, 0.03));
+  rotateY(v, rand(-0.03, 0.03) * strikeScatter(p));
   strike(p, v);
 }
 
@@ -622,12 +803,14 @@ function passTo(p, tm) {
   lead.z = clamp(lead.z, -HALF_W + 1, HALF_W - 1);
   lead.y = 1.3;
   const d = dist2D(ball.pos, lead);
-  strike(p, velWithAngle(ball.pos, lead, (d > 25 ? 24 : 16) * DEG));
+  const v = velWithAngle(ball.pos, lead, (d > 25 ? 24 : 16) * DEG);
+  rotateY(v, rand(-1, 1) * (1 - p.attr.pass / 100) * 0.12);
+  strike(p, v);
 }
 
 function clearance(p) {
   const v = new V3(p.dir, 0, rand(-0.3, 0.3)).normalize();
-  const s = rand(24, 30), th = rand(28, 36) * DEG;
+  const s = rand(24, 30) * (0.9 + 0.2 * (p.attr.strike - 40) / 60), th = rand(28, 36) * DEG;
   strike(p, new V3(v.x * Math.cos(th) * s, Math.sin(th) * s, v.z * Math.cos(th) * s));
 }
 
@@ -742,11 +925,13 @@ function onEndLine(att, y, z) {
   const who = TEAMS[att].name;
   if (Math.abs(z) < GOAL_HALF && y < BAR_H) {
     game.score[att].g++;
+    celebrate(att, 3.2);
     endPlay('GOAL!', `${who} +3`, 3, () => puckOut(def));
     sfx.cheer(att === 0 ? 1.2 : 0.6);
     sfx.whistle();
   } else if (Math.abs(z) < GOAL_HALF && y < 40) {
     game.score[att].p++;
+    celebrate(att, 2);
     endPlay('POINT!', `${who} +1`, 2.2, () => puckOut(def));
     sfx.cheer(att === 0 ? 0.8 : 0.4);
   } else if (ball.lastTeam === def) {
@@ -756,6 +941,10 @@ function onEndLine(att, y, z) {
     endPlay('WIDE', '', 1.6, () => puckOut(def));
     sfx.groan();
   }
+}
+
+function celebrate(team, dur) {
+  for (const p of players) if (p.team === team) p.celebrate = dur + rand(0, 0.6);
 }
 
 function checkPickup() {
@@ -773,7 +962,7 @@ function checkPickup() {
   if (best.isGK && speed > 16 && ball.lastTeam !== best.team) {
     if (best.saveRoll !== ball.shotId) {
       best.saveRoll = ball.shotId;
-      best.saveOk = Math.random() < clamp(0.9 - (speed - 15) * 0.025, 0.3, 0.85);
+      best.saveOk = Math.random() < clamp(0.9 - (speed - 15) * 0.025 + (best.attr.keeping - 70) * 0.004, 0.3, 0.9);
     }
     if (!best.saveOk) return;
     flash('SAVE!', `${TEAMS[best.team].name} keeper`, 1.2);
@@ -795,7 +984,7 @@ function aiTackles(dt) {
       if (p.tackleTimer <= 0) {
         p.tackleTimer = rand(0.6, 1.2);
         p.swing = 0.001;
-        if (Math.random() < (c === human ? 0.35 : 0.45)) { dispossess(c, p); return; }
+        if (Math.random() < (c === human ? 0.35 : 0.45) * (0.5 + p.attr.tackle / 100)) { dispossess(c, p); return; }
       }
     }
   }
@@ -806,7 +995,7 @@ function humanTackle() {
   if (!p || p.swing > 0) return;
   p.swing = 0.001;
   const c = ball.carrier;
-  if (c && c.team !== 0 && c.protect <= 0 && dist2D(c.pos, p.pos) < 2.0 && Math.random() < 0.55) dispossess(c, p);
+  if (c && c.team !== 0 && c.protect <= 0 && dist2D(c.pos, p.pos) < 2.0 && Math.random() < 0.55 * (0.6 + p.attr.tackle / 125)) dispossess(c, p);
   else if (!c && ball.pos.y < 2.8 && Math.hypot(ball.pos.x - p.pos.x, ball.pos.z - p.pos.z) < 1.6) {
     // flick a loose ball up into the hand
     p.pickupCooldown = 0;
@@ -836,7 +1025,8 @@ function readInput() {
 
 function humanDesired() {
   const p = human;
-  let s = keys.ShiftLeft || keys.ShiftRight ? 9.2 : 7;
+  const sprint = (keys.ShiftLeft || keys.ShiftRight) && !p.winded;
+  let s = (sprint ? 9.2 : 7) * p.speedMul;
   if (ball.carrier === p) s *= 0.92;
   if (charging) s *= 0.55;
   return p.des.copy(inputDir).multiplyScalar(s);
@@ -892,7 +1082,10 @@ function humanRelease() {
   const kind = charging;
   charging = null;
   if (!human || ball.carrier !== human || game.state !== 'play') return;
-  strike(human, humanStrikeVel(kind, charge));
+  const v = humanStrikeVel(kind, charge);
+  v.multiplyScalar(strikePower(human));
+  rotateY(v, rand(-1, 1) * (1 - human.attr.strike / 100) * 0.05);
+  strike(human, v);
 }
 
 function humanHandPass() {
@@ -909,18 +1102,20 @@ function humanHandPass() {
     const s = cos * 2 - d * 0.03;
     if (s > bs) { bs = s; best = tm; }
   }
-  if (best) passTo(p, best);
+  if (best) { passTo(p, best); setHuman(best); switchLock = 1.0; }
   else strike(p, new V3(aim.x * 9, 4, aim.z * 9));
 }
 
 window.addEventListener('keydown', (e) => {
   sfx.init();
-  if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
+  if (['Space', 'Tab', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
   if (e.repeat) return;
   keys[e.code] = true;
   if (e.code === 'Enter' && (game.state === 'menu' || game.state === 'fulltime')) { startMatch(); return; }
   if (e.code === 'KeyP' || e.code === 'Escape') { togglePause(); return; }
   if (e.code === 'KeyC') { game.camMode = (game.camMode + 1) % 2; return; }
+  if (e.code === 'KeyT') { game.autoSwitch = !game.autoSwitch; flash(game.autoSwitch ? 'AUTO-SWITCH ON' : 'AUTO-SWITCH OFF', '', 1); return; }
+  if (e.code === 'Tab') { e.preventDefault(); if (game.state === 'play' && human) cycleHuman(e.shiftKey ? -1 : 1); return; }
   if (game.state !== 'play' || !human) return;
   if (e.code === 'KeyQ') switchHuman();
   else if (e.code === 'KeyE') humanHandPass();
@@ -976,6 +1171,7 @@ function resetPositions() {
   for (const p of players) {
     p.pos.copy(p.base); p.vel.set(0, 0, 0); p.facing.set(p.dir, 0, 0);
     p.holdTimer = 0; p.protect = 0; p.pickupCooldown = 0; p.swing = 0; p.freeShot = false;
+    p.celebrate = 0; p.energy = Math.min(1, p.energy + 0.3);
   }
 }
 
@@ -1089,7 +1285,8 @@ const hud = {
   scoreHome: $('scoreHome'), scoreAway: $('scoreAway'), clock: $('clock'),
   msg: $('message'), msgMain: $('msgMain'), msgSub: $('msgSub'),
   power: $('power'), powerFill: $('powerFill'), powerLabel: $('powerLabel'),
-  minimap: $('minimap'),
+  minimap: $('minimap'), card: $('card'), cardBody: $('cardBody'), stamina: $('staminaFill'),
+  edgeHuman: $('edgeHuman'), edgeBall: $('edgeBall'),
 };
 $('nameHome').textContent = TEAMS[0].name;
 $('nameAway').textContent = TEAMS[1].name;
@@ -1157,28 +1354,44 @@ function updateHUD(dt) {
     } else hud.power.classList.remove('show');
   } else hud.power.classList.remove('show');
 
+  if (human !== cardFor) renderCard();
+  if (human) { hud.stamina.style.width = `${human.energy * 100}%`; hud.stamina.classList.toggle('low', human.winded || human.energy < 0.25); }
   drawMinimap();
+}
+
+let cardFor = null;
+function renderCard() {
+  cardFor = human;
+  hud.card.classList.toggle('show', !!human);
+  if (!human) return;
+  const p = human;
+  const rows = ATTR_LABELS.map(([k, n]) => `<div class="row"><span>${n}</span><div class="bar"><i style="width:${p.attr[k]}%"></i></div><b>${p.attr[k]}</b></div>`).join('');
+  hud.cardBody.innerHTML = `<div class="who"><span class="num" style="background:${TEAMS[0].css}">${p.number}</span><span class="nm">${p.name}</span><span class="role">${{ B: 'Back', M: 'Midfield', F: 'Forward', GK: 'Keeper' }[p.role]}</span></div>${rows}`;
 }
 
 // ---------------------------------------------------------------- camera
 function updateCamera(dt) {
-  const focus = new V3();
-  if (human) focus.copy(human.pos).multiplyScalar(0.65).addScaledVector(ball.pos, 0.35);
-  else focus.copy(ball.pos);
-  focus.y = 0;
+  // follow the ball, leading slightly in the direction it's travelling
+  const focus = new V3(ball.pos.x, 0, ball.pos.z);
+  if (!ball.carrier) {
+    const lx = clamp(ball.vel.x * 0.3, -10, 10), lz = clamp(ball.vel.z * 0.3, -6, 6);
+    focus.x = clamp(focus.x + lx, -HALF_L, HALF_L);
+    focus.z = clamp(focus.z + lz, -HALF_W, HALF_W);
+  }
+  const high = clamp((ball.pos.y - 3) / 12, 0, 1);
   let pos, look;
   if (game.state === 'menu') {
     const a = game.time * 0.08;
     pos = new V3(Math.cos(a) * 75, 32, Math.sin(a) * 60);
     look = new V3(0, 0, 0);
   } else if (game.camMode === 0) {
-    pos = new V3(focus.x - 17, 10.5, focus.z * 0.85);
+    pos = new V3(focus.x - 17 - high * 5, 10.5 + high * 4, focus.z * 0.85);
     look = new V3(focus.x + 9, 0, focus.z * 0.95);
   } else {
     pos = new V3(focus.x * 0.9, 30, HALF_W + 26);
     look = new V3(focus.x, 0, focus.z * 0.5);
   }
-  const k = 1 - Math.exp(-4 * dt);
+  const k = 1 - Math.exp(-5 * dt);
   camera.position.lerp(pos, k);
   camLook.lerp(look, k);
   camera.lookAt(camLook);
@@ -1198,6 +1411,7 @@ function step(dt) {
     else charge = Math.min(1, charge + dt / 0.9);
   }
   planTeams();
+  autoSwitch(dt);
   for (const p of players) p.update(dt);
   separate();
   const sub = 4;
@@ -1210,8 +1424,63 @@ function step(dt) {
   }
 }
 
-function syncVisuals() {
+const TRAIL_N = 28;
+const trailPts = [];
+const trail = new THREE.Line(new THREE.BufferGeometry().setFromPoints(Array.from({ length: TRAIL_N }, () => new V3())), new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.55 }));
+trail.frustumCulled = false;
+scene.add(trail);
+const seam = new THREE.Mesh(new THREE.TorusGeometry(BALL_R * 0.99, 0.012, 6, 24), new THREE.MeshStandardMaterial({ color: 0x5a3a1c }));
+ball.mesh.add(seam);
+const spinAxis = new V3();
+
+function updateTrail() {
+  const fast = !ball.carrier && ball.vel.length() > 10 && game.state !== 'menu';
+  if (fast) trailPts.push(ball.pos.clone()); else if (trailPts.length) trailPts.shift();
+  while (trailPts.length > TRAIL_N) trailPts.shift();
+  const attr = trail.geometry.attributes.position;
+  for (let i = 0; i < TRAIL_N; i++) {
+    const q = trailPts[Math.min(i, trailPts.length - 1)] || ball.pos;
+    attr.setXYZ(i, q.x, q.y, q.z);
+  }
+  attr.needsUpdate = true;
+  trail.visible = trailPts.length > 1;
+}
+
+const _p = new V3();
+function edgeMarker(el, pos, label) {
+  _p.copy(pos).applyMatrix4(camera.matrixWorldInverse);
+  const behind = _p.z > 0;
+  _p.copy(pos).project(camera);
+  let x = _p.x, y = _p.y;
+  if (behind) { x = -x; y = -y; }
+  const w = window.innerWidth, h = window.innerHeight;
+  const mx = 1 - 60 / w, my = 1 - 70 / h;
+  const inside = !behind && Math.abs(x) < mx && Math.abs(y) < my;
+  el.classList.toggle('show', !inside);
+  if (inside) return;
+  if (Math.abs(x) < 1e-3 && Math.abs(y) < 1e-3) y = -1;
+  const sc = Math.max(Math.abs(x) / mx, Math.abs(y) / my);
+  x /= sc; y /= sc;
+  el.style.transform = `translate(${((x * 0.5 + 0.5) * w).toFixed(1)}px, ${((-y * 0.5 + 0.5) * h).toFixed(1)}px)`;
+  el.firstElementChild.style.transform = `rotate(${Math.atan2(-y * h, x * w)}rad)`;
+  if (label) el.lastElementChild.textContent = label;
+}
+
+function syncVisuals(dt) {
   ball.mesh.position.copy(ball.pos);
+  if (!ball.carrier && game.state !== 'menu') {
+    const sp = ball.vel.length();
+    if (sp > 0.5) {
+      spinAxis.set(ball.vel.z, 0, -ball.vel.x).normalize();
+      ball.mesh.rotateOnWorldAxis(spinAxis, (sp * dt) / BALL_R * 0.5);
+    }
+  }
+  updateTrail();
+  const playing = !!human && game.state !== 'menu' && game.state !== 'fulltime';
+  if (playing) {
+    edgeMarker(hud.edgeHuman, _hp.set(human.pos.x, 1.2, human.pos.z), `${human.name} · ${Math.round(dist2D(human.pos, ball.pos))}m from ball`);
+  } else hud.edgeHuman.classList.remove('show');
+  if (game.state !== 'menu') edgeMarker(hud.edgeBall, ball.pos, ''); else hud.edgeBall.classList.remove('show');
   ballShadowMarker.position.set(ball.pos.x, 0.02, ball.pos.z);
   ballShadowMarker.visible = ball.pos.y > 1.2 && !ball.carrier;
   const hv = !!human && game.state !== 'menu';
@@ -1222,6 +1491,7 @@ function syncVisuals() {
   }
 }
 
+const _hp = new V3();
 let last = performance.now();
 function frame(now) {
   requestAnimationFrame(frame);
@@ -1233,8 +1503,9 @@ function frame(now) {
     if (game.state === 'play' || game.state === 'dead') step(dt);
     for (const p of players) p.animate(dt);
   }
-  syncVisuals();
   updateCamera(dt);
+  camera.updateMatrixWorld();
+  syncVisuals(dt);
   updateHUD(dt);
   renderer.render(scene, camera);
 }

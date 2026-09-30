@@ -17,8 +17,11 @@
     </div>
     <div id="message"><div id="msgMain"></div><div id="msgSub"></div></div>
     <div id="power"><div id="powerFill"></div><span id="powerLabel"></span></div>
+    <div id="card"><div id="cardBody"></div><div class="row"><span>Energy</span><div class="bar"><i id="staminaFill"></i></div></div></div>
+    <div class="edge" id="edgeHuman"><div class="arrow"></div><div class="lbl"></div></div>
+    <div class="edge ball" id="edgeBall"><div class="arrow"></div><div class="lbl"></div></div>
     <canvas id="minimap" width="220" height="142"></canvas>
-    <div id="help">WASD move · Shift sprint · Space loft (hold) · X drive (hold) · E hand pass · Space w/o ball: hook · Q switch · C camera · P pause</div>
+    <div id="help">WASD move · Shift sprint · Space loft (hold) · X drive (hold) · E hand pass · Space w/o ball: hook · Q switch to nearest · Tab cycle · T auto-switch · C camera · P pause</div>
   </div>
 
   <div id="overlay">
@@ -33,6 +36,8 @@
         <tr><td>E</td><td>Hand pass to a teammate</td></tr>
         <tr><td>Space (without ball)</td><td>Hook / tackle the ball carrier</td></tr>
         <tr><td>Q</td><td>Switch to player nearest the sliotar</td></tr>
+        <tr><td>Tab / Shift+Tab</td><td>Cycle through your players</td></tr>
+        <tr><td>T</td><td>Toggle auto-switch to the player nearest the ball</td></tr>
         <tr><td>C · P</td><td>Toggle camera · Pause</td></tr>
       </table>
       <button id="startBtn">Throw in (Enter)</button>

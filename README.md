@@ -23,8 +23,14 @@ Then open <http://127.0.0.1:8765/>. (Any static file server works; ES modules ca
 | E | Hand pass to a teammate |
 | Space (without the ball) | Hook / tackle the ball carrier |
 | Q | Switch to the player nearest the sliotar |
+| Tab / Shift+Tab | Cycle through your outfield players |
+| T | Toggle auto-switch (on by default) |
 | C | Toggle camera (behind / broadcast) |
 | P / Esc | Pause |
 
 While charging a strike, the power bar shows whether the shot is on target and a ring marks where it will land.
+The camera follows the sliotar. When your controlled player is off screen, an arrow at the screen edge points to them.
+
+Every player has attributes — **speed, striking, passing, tackling, stamina** (and **keeping** for goalies) — shown on the player card. They affect run speed, shot power/accuracy, pass accuracy, tackle success, how quickly players tire (sprinting drains the energy bar) and save chance. Hand-passing switches control to the receiver.
+
 Scores use GAA notation: `goals-points (total)`.

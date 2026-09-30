@@ -47,3 +47,28 @@ html, body { margin: 0; height: 100%; overflow: hidden; background: #000; font-f
 .controls td:first-child { font-weight: 700; color: #ffd60a; white-space: nowrap; }
 #startBtn { font-size: 18px; font-weight: 700; padding: 12px 28px; border: 0; border-radius: 8px; background: #ffd60a; color: #111; cursor: pointer; }
 #startBtn:hover { background: #ffe34d; }
+
+#help { bottom: 16px; }
+#card { position: absolute; left: 16px; bottom: 56px; width: 230px; padding: 10px 12px; border-radius: 8px; background: rgba(0,0,0,.55); font-size: 12px; display: none; }
+#card.show { display: block; }
+#card .who { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+#card .num { min-width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 13px; }
+#card .nm { font-weight: 700; font-size: 14px; flex: 1; }
+#card .role { opacity: .7; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; }
+#card .row { display: flex; align-items: center; gap: 8px; margin: 3px 0; }
+#card .row span { width: 54px; opacity: .85; }
+#card .row b { width: 22px; text-align: right; font-variant-numeric: tabular-nums; }
+#card .bar { flex: 1; height: 6px; background: rgba(255,255,255,.18); border-radius: 3px; overflow: hidden; }
+#card .bar i { display: block; height: 100%; background: linear-gradient(90deg, #4cd964, #ffd60a); }
+#staminaFill { width: 100%; background: #4aa3e0 !important; }
+#staminaFill.low { background: #ff3b30 !important; }
+
+.edge { position: absolute; left: 0; top: 0; display: none; width: 0; height: 0; }
+.edge.show { display: block; }
+.edge .arrow { position: absolute; left: -17px; top: -17px; width: 34px; height: 34px; }
+.edge .arrow::before { content: ''; position: absolute; inset: 0; background: #ffd60a; clip-path: polygon(100% 50%, 15% 5%, 38% 50%, 15% 95%); filter: drop-shadow(0 0 4px rgba(0,0,0,.8)); animation: edgePulse .9s ease-in-out infinite alternate; }
+.edge .lbl { position: absolute; transform: translate(-50%, 22px); white-space: nowrap; font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 10px; background: rgba(0,0,0,.65); color: #ffd60a; }
+.edge.ball .arrow { transform-origin: center; }
+.edge.ball .arrow::before { background: #fff; clip-path: polygon(100% 50%, 25% 15%, 40% 50%, 25% 85%); opacity: .8; }
+.edge.ball .lbl { display: none; }
+@keyframes edgePulse { from { opacity: .6; } to { opacity: 1; } }
