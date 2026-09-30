@@ -33,4 +33,6 @@ The camera follows the sliotar. When your controlled player is off screen, an ar
 
 Every player has attributes — **speed, striking, passing, tackling, stamina** (and **keeping** for goalies) — shown on the player card. They affect run speed, shot power/accuracy, pass accuracy, tackle success, how quickly players tire (sprinting drains the energy bar) and save chance. Hand-passing switches control to the receiver.
 
+Players animate their pickups: a jumping catch for high balls, a one-handed reach for mid-height ones, a crouching hurley scoop to lift the sliotar off the ground (also used for frees), and a full-stretch dive for keeper saves. Expect turf spray, dust, blinks and strike sparks too.
+
 Scores use GAA notation: `goals-points (total)`.

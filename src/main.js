@@ -352,7 +352,8 @@ function buildPlayerMesh(kit, isGK, look) {
   head.add(mk(GEO.head, skin, 0, 0, 0));
   const hr = mk(GEO.hair, hairMat, -0.05, -0.02, 0); hr.scale.set(1, 0.9, 1.05); head.add(hr);
   head.add(mk(GEO.helmet, helmet, 0, 0.015, 0));
-  for (const z of [-0.1, 0.1]) { const e = new THREE.Mesh(GEO.eye, eyeMat); e.position.set(0.118, 0.02, z * 0.55); head.add(e); }
+  const eyes = [];
+  for (const z of [-0.1, 0.1]) { const e = new THREE.Mesh(GEO.eye, eyeMat); e.position.set(0.118, 0.02, z * 0.55); head.add(e); eyes.push(e); }
   for (const y of [-0.045, 0.0, 0.045]) head.add(mk(GEO.grillBar, grillMat, 0.15, y, 0));
   for (const z of [-0.07, 0, 0.07]) head.add(mk(GEO.grillPost, grillMat, 0.15, 0, z));
   torso.add(head);
@@ -367,7 +368,7 @@ function buildPlayerMesh(kit, isGK, look) {
   arms[1].el.add(pivot);
 
   root.scale.setScalar(look.height);
-  return { root, body, torso, chest, head, legs, arms, pivot };
+  return { root, body, torso, chest, head, eyes, legs, arms, pivot };
 }
 
 // ---------------------------------------------------------------- audio
@@ -395,6 +396,8 @@ const sfx = {
   },
   hit(power = 0.5) { this.noise(0.08, 'bandpass', 1800 + power * 1200, 0.5 + power * 0.4); },
   bounce() { this.noise(0.05, 'lowpass', 600, 0.15); },
+  catch() { this.noise(0.07, 'lowpass', 900, 0.35); },
+  lift() { this.noise(0.12, 'highpass', 2500, 0.18, 0.01); },
   post() { this.noise(0.25, 'bandpass', 3200, 0.5); },
   cheer(level = 1) { this.noise(2.5 * level + 0.5, 'bandpass', 900, 0.35 * level, 0.3); },
   groan() { this.noise(1.2, 'lowpass', 400, 0.25, 0.2); },
@@ -410,6 +413,49 @@ const sfx = {
     o.start(); lfo.start(); o.stop(t + d); lfo.stop(t + d);
   },
 };
+
+// ---------------------------------------------------------------- particles
+const PART_N = 160;
+const partGeo = new THREE.SphereGeometry(1, 6, 4);
+const parts = [];
+for (let i = 0; i < PART_N; i++) {
+  const mesh = new THREE.Mesh(partGeo, new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, depthWrite: false }));
+  mesh.visible = false;
+  scene.add(mesh);
+  parts.push({ mesh, vel: new V3(), life: 0, max: 1, size: 0.1, grow: 0, grav: 0 });
+}
+let partIdx = 0;
+
+function burst(pos, n, o = {}) {
+  const { color = 0x8a6a3a, speed = 2, up = 1.5, life = 0.6, size = 0.1, grav = 6, grow = 0, opacity = 0.8 } = o;
+  for (let i = 0; i < n; i++) {
+    const q = parts[partIdx++ % PART_N];
+    const a = Math.random() * Math.PI * 2, r = Math.random() * speed;
+    q.mesh.position.copy(pos);
+    q.vel.set(Math.cos(a) * r, Math.random() * up, Math.sin(a) * r);
+    q.life = q.max = life * rand(0.7, 1.2);
+    q.size = size * rand(0.7, 1.3); q.grow = grow; q.grav = grav; q.op = opacity;
+    q.mesh.material.color.setHex(color);
+    q.mesh.visible = true;
+  }
+}
+
+function updateParticles(dt) {
+  for (const q of parts) {
+    if (q.life <= 0) continue;
+    q.life -= dt;
+    if (q.life <= 0) { q.mesh.visible = false; continue; }
+    q.vel.y -= q.grav * dt;
+    q.mesh.position.addScaledVector(q.vel, dt);
+    if (q.mesh.position.y < 0.02) { q.mesh.position.y = 0.02; q.vel.y *= -0.3; q.vel.x *= 0.7; q.vel.z *= 0.7; }
+    const k = q.life / q.max;
+    q.mesh.scale.setScalar(q.size * (1 + q.grow * (1 - k)));
+    q.mesh.material.opacity = q.op * k;
+  }
+}
+const DUST = { color: 0xb59a6a, speed: 0.6, up: 0.6, life: 0.55, size: 0.09, grav: -0.3, grow: 2.5, opacity: 0.45 };
+const TURF = { color: 0x3a6e2c, speed: 2.2, up: 3.5, life: 0.7, size: 0.05, grav: 12, grow: 0, opacity: 0.95 };
+const _fp = new V3();
 
 // ---------------------------------------------------------------- game state
 const ball = {
@@ -478,7 +524,7 @@ class Player {
     }
     // speed 40 -> 0.86x, 100 -> 1.11x
     this.speedMul = 0.86 + 0.25 * (this.attr.speed - 40) / 60;
-    this.energy = 1; this.winded = false; this.celebrate = 0; this.headYaw = 0;
+    this.act = null; this.lastStep = 0; this.blinkT = rand(1, 4); this.energy = 1; this.winded = false; this.celebrate = 0; this.headYaw = 0;
     const look = { skin: SKINS[(Math.random() * SKINS.length) | 0], hair: HAIRS[(Math.random() * HAIRS.length) | 0], number, height: 0.95 + (this.attr.speed > 70 ? 0.02 : 0.05) * Math.random() + rand(0, 0.06) };
     this.mesh = buildPlayerMesh(TEAMS[team], form.role === 'GK', look);
     scene.add(this.mesh.root);
@@ -499,7 +545,8 @@ class Player {
     this.carryTime = ball.carrier === this ? this.carryTime + dt : 0;
 
     const desired = this === human ? humanDesired() : this.think(dt);
-    const fm = this.energy < 0.25 ? 0.7 + this.energy * 1.2 : 1;
+    let fm = this.energy < 0.25 ? 0.7 + this.energy * 1.2 : 1;
+    if (this.act) fm *= this.act.kind === 'lift' ? 0.4 : this.act.kind === 'dive' ? 0.25 : 0.75;
     const k = 1 - Math.exp(-7 * dt);
     this.vel.x += (desired.x * fm - this.vel.x) * k;
     this.vel.z += (desired.z * fm - this.vel.z) * k;
@@ -658,6 +705,72 @@ class Player {
       m.torso.rotation.z = 0.12;
     }
 
+    // catching / lifting / diving
+    m.body.rotation.x = 0;
+    const act = this.act;
+    if (act && !celeb) {
+      act.t += dt;
+      const u = Math.min(1, act.t / act.dur), arc = Math.sin(Math.PI * u);
+      const reach = u < 0.5 ? u / 0.5 : 1 - (u - 0.5) / 0.5, r = Math.sin(reach * Math.PI / 2);
+      const hurley = (abs) => { m.pivot.rotation.z = abs - R.sh.rotation.z - R.el.rotation.z - m.torso.rotation.z; };
+      const legs = (hip, knee) => { for (const lg of m.legs) { lg.hip.rotation.z = hip; lg.knee.rotation.z = -knee; } };
+      m.body.rotation.x = 0;
+      if (act.kind === 'catchHigh') {
+        m.body.position.y = arc * 0.65;
+        L.sh.rotation.z = R.sh.rotation.z = 0.4 + 2.5 * Math.sin(Math.min(1, u / 0.45) * Math.PI / 2) * (u < 0.7 ? 1 : 1 - (u - 0.7) / 0.3 * 0.75);
+        L.el.rotation.z = R.el.rotation.z = 0.1 + (u > 0.6 ? (u - 0.6) * 2.5 : 0);
+        L.sh.rotation.x = 0.15; R.sh.rotation.x = -0.15;
+        legs(0.35 + 0.45 * arc, 0.2 + 1.0 * arc);
+        m.legs[1].hip.rotation.z -= 0.5 * arc;
+        m.torso.rotation.z = 0.25 * arc; m.torso.rotation.y = 0;
+        hurley(1.0 + arc * 0.5);
+        if (u > 0.82) { const c = Math.sin((u - 0.82) / 0.18 * Math.PI); m.body.position.y -= c * 0.18; legs(0.5 * c, 0.9 * c); m.torso.rotation.z = -0.3 * c; }
+      } else if (act.kind === 'catch') {
+        L.sh.rotation.z = R.sh.rotation.z = 0.4 + 1.3 * r; L.el.rotation.z = R.el.rotation.z = 0.15 + 0.5 * (1 - r);
+        L.sh.rotation.x = 0.35 * act.side * r; R.sh.rotation.x = 0.35 * act.side * r;
+        m.torso.rotation.z = -0.25 * r; m.torso.rotation.y = act.side * -0.35 * r;
+        m.body.position.y = -0.06 * arc;
+        m.legs[0].hip.rotation.z = 0.5 * r; m.legs[1].hip.rotation.z = -0.3 * r;
+        hurley(0.9);
+      } else if (act.kind === 'lift') {
+        const c = Math.sin(Math.min(1, u / 0.5) * Math.PI / 2) * (u < 0.6 ? 1 : 1 - (u - 0.6) / 0.4);
+        m.body.position.y = -0.23 * c;
+        legs(0.9 * c, 1.5 * c);
+        m.torso.rotation.z = -0.8 * c + (u > 0.6 ? -0.15 * Math.sin((u - 0.6) / 0.4 * Math.PI) : 0);
+        m.torso.rotation.y = 0.2 * c;
+        R.sh.rotation.z = 0.9 * c + 0.3; R.el.rotation.z = 0.3; L.sh.rotation.z = 0.7 * c + 0.2; L.el.rotation.z = 0.5;
+        const scoop = u < 0.35 ? 0.9 : u < 0.7 ? 0.9 + 1.9 * Math.sin((u - 0.35) / 0.35 * Math.PI / 2) : 2.8 - 1.55 * (u - 0.7) / 0.3;
+        hurley(scoop);
+        if (!act.fx && u > 0.35) { act.fx = true; burst(ball.pos, 5, TURF); }
+        m.head.rotation.z = 0.35 * c;
+      } else if (act.kind === 'dive') {
+        const out = Math.sin(Math.min(1, u / 0.35) * Math.PI / 2) * (u < 0.65 ? 1 : 1 - (u - 0.65) / 0.35);
+        m.body.rotation.x = -act.side * 1.25 * out;
+        m.body.position.y = 0.55 * Math.sin(Math.PI * Math.min(1, u * 1.2)) + 0.05;
+        L.sh.rotation.z = R.sh.rotation.z = 2.7 * out + 0.2; L.el.rotation.z = R.el.rotation.z = 0.1;
+        legs(-0.4 * out, 0.4 * out);
+        m.torso.rotation.z = 0.1 * out; m.torso.rotation.y = 0;
+        hurley(0.4);
+      }
+      if (u >= 1) {
+        if (act.kind === 'catchHigh' || act.kind === 'dive') burst(_fp.set(this.pos.x, 0.05, this.pos.z), 7, DUST);
+        this.act = null; m.body.rotation.x = 0;
+      }
+    }
+
+    // footfall dust
+    const stepN = Math.floor(ph / Math.PI);
+    if (stepN !== this.lastStep) {
+      this.lastStep = stepN;
+      if (sp > 7.4 && game.state !== 'menu') burst(_fp.set(this.pos.x - this.facing.x * 0.2, 0.05, this.pos.z - this.facing.z * 0.2), 1, DUST);
+    }
+
+    // blinking
+    this.blinkT -= dt;
+    const bl = this.blinkT < 0.12 ? Math.max(0.1, Math.abs(this.blinkT / 0.12 - 0.5) * 2) : 1;
+    if (this.blinkT < 0) this.blinkT = rand(2, 5);
+    for (const e of m.eyes) e.scale.y = bl;
+
     // head tracks the ball
     let want = Math.atan2(-(ball.pos.z - this.pos.z), ball.pos.x - this.pos.x) - m.root.rotation.y;
     want = Math.atan2(Math.sin(want), Math.cos(want));
@@ -752,7 +865,8 @@ function rotateY(v, ang) {
   return v;
 }
 
-function givePossession(p) {
+function givePossession(p, kind) {
+  if (kind !== 'none') startAct(p, kind);
   ball.carrier = p;
   ball.vel.set(0, 0, 0);
   ball.lastTeam = p.team;
@@ -762,8 +876,28 @@ function givePossession(p) {
   if (p.team === 0 && !p.isGK) setHuman(p);
 }
 
+function startAct(p, kind) {
+  const by = ball.pos.y, sp = ball.vel.length();
+  if (!kind) {
+    if (p.isGK && sp > 14 && ball.lastTeam !== p.team) kind = 'dive';
+    else if (by > 1.7) kind = 'catchHigh';
+    else if (by < 0.55 && sp < 9) kind = 'lift';
+    else kind = 'catch';
+  }
+  const dur = { dive: 0.75, catchHigh: 0.62, catch: 0.42, lift: 0.6 }[kind];
+  const dx = ball.pos.x - p.pos.x, dz = ball.pos.z - p.pos.z;
+  const side = Math.sign(dx * -p.facing.z + dz * p.facing.x) || 1;
+  p.act = { kind, t: 0, dur, side, fx: false };
+  ball.blend = { t: 0, dur: kind === 'lift' ? dur * 0.85 : kind === 'dive' ? 0.3 : 0.18, from: ball.pos.clone(), lift: kind === 'lift' };
+  if (kind === 'lift') { sfx.lift(); burst(ball.pos, 6, TURF); }
+  else { sfx.catch(); if (kind !== 'catch') burst(_fp.set(p.pos.x, 0.05, p.pos.z), 3, DUST); }
+}
+
 function strike(p, v) {
   if (ball.carrier !== p) return;
+  p.act = null; ball.blend = null;
+  burst(ball.pos, 7, { color: 0xffffff, speed: 1.6, up: 1.4, life: 0.3, size: 0.045, grav: 4, opacity: 0.9 });
+  if (ball.pos.y < 1.3) burst(_fp.set(ball.pos.x, 0.05, ball.pos.z), 6, TURF);
   ball.carrier = null;
   ball.vel.copy(v);
   ball.lastTeam = p.team;
@@ -835,6 +969,8 @@ function bestPass(p, desperate) {
 function dispossess(c, tackler) {
   ball.carrier = null;
   c.pickupCooldown = 0.7;
+  c.act = null; ball.blend = null;
+  burst(ball.pos, 8, TURF);
   tackler.pickupCooldown = 0;
   const a = rand(0, Math.PI * 2);
   ball.pos.y = 0.9;
@@ -861,6 +997,14 @@ function updateBall(dt) {
     const moving = Math.hypot(c.vel.x, c.vel.z) > 1;
     const hop = moving ? Math.abs(Math.sin(game.time * 7)) * 0.35 : 0;
     ball.pos.set(c.pos.x + c.facing.x * 0.9 + rx * 0.28, 1.05 + hop, c.pos.z + c.facing.z * 0.9 + rz * 0.28);
+    const b = ball.blend;
+    if (b) {
+      b.t += dt;
+      const u = Math.min(1, b.t / b.dur), e = u * u * (3 - 2 * u);
+      const y = b.lift ? b.from.y + (ball.pos.y - b.from.y) * e + Math.sin(Math.PI * u) * 0.35 : b.from.y + (ball.pos.y - b.from.y) * e;
+      ball.pos.set(b.from.x + (ball.pos.x - b.from.x) * e, y, b.from.z + (ball.pos.z - b.from.z) * e);
+      if (u >= 1) ball.blend = null;
+    }
     return;
   }
   const p = ball.pos, v = ball.vel;
@@ -881,7 +1025,7 @@ function updateBall(dt) {
       const dx = p.x - gx, dz = p.z - pz, d = Math.hypot(dx, dz), rr = BALL_R + 0.08;
       if (d < rr && d > 1e-6 && p.y < POST_H) {
         const nx = dx / d, nz = dz / d, vn = v.x * nx + v.z * nz;
-        if (vn < 0) { v.x -= 1.7 * vn * nx; v.z -= 1.7 * vn * nz; sfx.post(); }
+        if (vn < 0) { v.x -= 1.7 * vn * nx; v.z -= 1.7 * vn * nz; sfx.post(); burst(p, 6, { color: 0xffffff, speed: 2.5, up: 2, life: 0.3, size: 0.05, grav: 4, opacity: 1 }); }
         p.x = gx + nx * rr; p.z = pz + nz * rr;
       }
     }
@@ -889,7 +1033,7 @@ function updateBall(dt) {
       const dx = p.x - gx, dy = p.y - BAR_H, d = Math.hypot(dx, dy), rr = BALL_R + 0.07;
       if (d < rr && d > 1e-6) {
         const nx = dx / d, ny = dy / d, vn = v.x * nx + v.y * ny;
-        if (vn < 0) { v.x -= 1.7 * vn * nx; v.y -= 1.7 * vn * ny; sfx.post(); }
+        if (vn < 0) { v.x -= 1.7 * vn * nx; v.y -= 1.7 * vn * ny; sfx.post(); burst(p, 6, { color: 0xffffff, speed: 2.5, up: 2, life: 0.3, size: 0.05, grav: 4, opacity: 1 }); }
         p.x = gx + nx * rr; p.y = BAR_H + ny * rr;
       }
     }
@@ -1171,7 +1315,7 @@ function resetPositions() {
   for (const p of players) {
     p.pos.copy(p.base); p.vel.set(0, 0, 0); p.facing.set(p.dir, 0, 0);
     p.holdTimer = 0; p.protect = 0; p.pickupCooldown = 0; p.swing = 0; p.freeShot = false;
-    p.celebrate = 0; p.energy = Math.min(1, p.energy + 0.3);
+    p.act = null; p.celebrate = 0; p.energy = Math.min(1, p.energy + 0.3);
   }
 }
 
@@ -1223,7 +1367,7 @@ function puckOut(team) {
   k.vel.set(0, 0, 0);
   pushOpponents(team, k.pos.x, 0, 14);
   ball.pos.set(k.pos.x, 1, 0);
-  givePossession(k);
+  givePossession(k, 'none');
   k.holdTimer = 1.4;
   game.state = 'play';
 }
@@ -1234,8 +1378,8 @@ function awardFree(team, x, z, freeShot) {
   const p = cand[0];
   p.pos.set(x, 0, z); p.vel.set(0, 0, 0);
   pushOpponents(team, x, z, 9);
-  ball.pos.set(x, 1, z);
-  givePossession(p);
+  ball.pos.set(x, BALL_R, z);
+  givePossession(p, 'lift');
   p.protect = p === human ? 2 : 30; // AI can't be tackled until the free is taken
   p.holdTimer = p === human ? 0 : 1.0;
   p.freeShot = freeShot;
@@ -1502,6 +1646,7 @@ function frame(now) {
     readInput();
     if (game.state === 'play' || game.state === 'dead') step(dt);
     for (const p of players) p.animate(dt);
+    updateParticles(dt);
   }
   updateCamera(dt);
   camera.updateMatrixWorld();
