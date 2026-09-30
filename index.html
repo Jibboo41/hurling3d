@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Hurling 3D</title>
+  <link rel="stylesheet" href="src/style.css" />
+</head>
+<body>
+  <div id="app"></div>
+
+  <div id="hud">
+    <div id="scoreboard">
+      <div class="team home"><span class="name" id="nameHome">HOME</span><span class="score" id="scoreHome">0-00</span></div>
+      <div id="clock">05:00</div>
+      <div class="team away"><span class="score" id="scoreAway">0-00</span><span class="name" id="nameAway">AWAY</span></div>
+    </div>
+    <div id="message"><div id="msgMain"></div><div id="msgSub"></div></div>
+    <div id="power"><div id="powerFill"></div><span id="powerLabel"></span></div>
+    <canvas id="minimap" width="220" height="142"></canvas>
+    <div id="help">WASD move · Shift sprint · Space loft (hold) · X drive (hold) · E hand pass · Space w/o ball: hook · Q switch · C camera · P pause</div>
+  </div>
+
+  <div id="overlay">
+    <div class="panel">
+      <h1>HURLING <span>3D</span></h1>
+      <p id="overlaySub">7-a-side · 5 minute match</p>
+      <table class="controls">
+        <tr><td>W A S D / Arrows</td><td>Move</td></tr>
+        <tr><td>Shift</td><td>Sprint</td></tr>
+        <tr><td>Space (hold &amp; release)</td><td>Lofted strike — over the bar for a point (1)</td></tr>
+        <tr><td>X (hold &amp; release)</td><td>Low drive — under the bar for a goal (3)</td></tr>
+        <tr><td>E</td><td>Hand pass to a teammate</td></tr>
+        <tr><td>Space (without ball)</td><td>Hook / tackle the ball carrier</td></tr>
+        <tr><td>Q</td><td>Switch to player nearest the sliotar</td></tr>
+        <tr><td>C · P</td><td>Toggle camera · Pause</td></tr>
+      </table>
+      <button id="startBtn">Throw in (Enter)</button>
+    </div>
+  </div>
+
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>
